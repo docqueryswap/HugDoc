@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DocuQuery - Groq AI</title>
+  <style>
+    body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 1rem; background: #f8fafc; }
+    .card { background: white; border-radius: 16px; padding: 24px; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    input, select, button { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 8px; }
+    button { background: #f97316; color: white; border: none; font-weight: 600; cursor: pointer; }
+    button:hover { background: #ea580c; }
+    #output { background: white; padding: 20px; border-radius: 12px; white-space: pre-wrap; border: 1px solid #e2e8f0; min-height: 120px; }
+  </style>
+</head>
+<body>
+  <h1>🦙 DocuQuery + Groq</h1>
+  <p>Upload a document, then ask questions. Powered by Llama 3 (FREE).</p>
+  <div class='card'>
+    <h3>1️⃣ Upload Document</h3>
+    <form id='uploadForm'>
+      <input type='file' name='file' accept='.pdf,.docx,.txt' required />
+      <button type='submit'>📤 Upload & Process</button>
+    </form>
+    <p id='uploadStatus'></p>
+  </div>
+  <div class='card'>
+    <h3>2️⃣ Ask a Question</h3>
+    <input type='text' id='question' placeholder='e.g., Why should I hire this candidate?' />
+    <select id='style'>
+      <option value='default'>Default</option>
+      <option value='kid'>🧒 Explain like I'm 5</option>
+      <option value='legal'>⚖️ Legal Tone</option>
+      <option value='short'>📝 Short Answer</option>
+    </select>
+    <button onclick='askQuestion()'>🤖 Get Answer</button>
+  </div>
+  <div id='output'>💬 Answer will appear here...</div>
+  <script>
+    document.getElementById('uploadForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const statusEl = document.getElementById('uploadStatus');
+      statusEl.innerHTML = '⏳ Uploading...';
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.error) { statusEl.innerHTML = `❌ ${data.error}`; return; }
+        const requestId = data.request_id;
+        statusEl.innerHTML = `🔄 Processing document... (request ${requestId})`;
+        const pollInterval = setInterval(async () => {
+          const statusRes = await fetch(`/status/${requestId}`);
+          const statusData = await statusRes.json();
+          if (statusData.status === 'done') {
+            clearInterval(pollInterval);
+            statusEl.innerHTML = `✅ Document processed! Ready for questions. (doc_id: ${statusData.doc_id})`;
+          } else if (statusData.status === 'error') {
+            clearInterval(pollInterval);
+            statusEl.innerHTML = `❌ Processing failed: ${statusData.error}`;
+          } else { statusEl.innerHTML = `⏳ Still processing...`; }
+        }, 2000);
+      } catch (err) { statusEl.innerHTML = `❌ Network error: ${err.message}`; }
+    };
+    async function askQuestion() {
+      const question = document.getElementById('question').value;
+      const style = document.getElementById('style').value;
+      const output = document.getElementById('output');
+      if (!question) return;
+      output.innerHTML = '🤔 Thinking...';
+      const res = await fetch('/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, style }) });
+      const data = await res.json();
+      output.textContent = data.error ? `❌ ${data.error}` : data.answer;
+    }
+  </script>
+</body>
+</html>
